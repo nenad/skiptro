@@ -13,29 +13,33 @@ func main() {
 	filename := os.Args[1]
 	filename2 := os.Args[2]
 
+	dur := time.Second * 20
+
 	// TODO Can be done in goroutines
-	images, err := skiptro.ExtractImages(filename, time.Second*52, time.Second*20)
+	images, err := skiptro.ExtractImages(filename, time.Second*50, dur)
 	if err != nil {
 		panic(err)
 	}
 
-	images2, err := skiptro.ExtractImages(filename2, time.Second, time.Second*20)
+	images2, err := skiptro.ExtractImages(filename2, time.Second, dur)
 	if err != nil {
 		panic(err)
 	}
 
 	similar := make([][]bool, len(images))
 
+	deltaDur := float64(dur.Milliseconds()) / float64(len(images))
+
 	// TODO Can be done in goroutines
 	imgHashes1 := make([]*goimagehash.ImageHash, len(images))
 	for i, img := range images {
-		hash, _ := goimagehash.AverageHash(img)
+		hash, _ := goimagehash.DifferenceHash(img)
 		imgHashes1[i] = hash
 	}
 
 	imgHashes2 := make([]*goimagehash.ImageHash, len(images2))
 	for i, img := range images2 {
-		hash, _ := goimagehash.AverageHash(img)
+		hash, _ := goimagehash.DifferenceHash(img)
 		imgHashes2[i] = hash
 	}
 
@@ -87,5 +91,5 @@ func main() {
 		}
 	}
 
-	fmt.Printf("i: %d; j: %d; maxFrames: %d\n", bi, bj, maxFrames)
+	fmt.Printf("i: %d (first clip starts at %.2fms); j: %d (second clip starts at %.2fms); maxFrames: %d\n", bi, deltaDur*float64(bi), bj, deltaDur*float64(bj), maxFrames)
 }
