@@ -7,6 +7,8 @@ import (
 	"image/jpeg"
 	"os/exec"
 	"time"
+
+	"github.com/corona10/goimagehash"
 )
 
 var (
@@ -14,15 +16,21 @@ var (
 	eoi = []byte{0xff, 0xd9}
 )
 
-// ExtractImages returns images from a video
-func ExtractImages(filename string, at time.Duration, duration time.Duration) ([]image.Image, error) {
+type HashExtractor struct {
+	HashFunc  func(mage image.Image) (*goimagehash.ImageHash, error)
+	FrameStep int
+}
+
+// ExtractHashes returns images from a video
+func (h *HashExtractor) ExtractHashes(filename string, at time.Duration, duration time.Duration) ([]*goimagehash.ImageHash, error) {
+	// TODO Maybe extract streaming from output?
 	cmd := exec.Command("ffmpeg",
 		"-ss", fmt.Sprintf("%.0f", at.Seconds()),
 		"-i", filename,
 		"-an",           // Disable audio stream
 		"-c:v", "mjpeg", // Set encoder to mjpeg
 		"-f", "image2pipe", // Set output to image2pipe
-		"-vf", "fps=5",
+		"-vf", fmt.Sprintf("fps=%d", h.FrameStep),
 		"-pix_fmt", "yuvj422p",
 		"-q", "1",
 		"-to", fmt.Sprintf("%.0f", duration.Seconds()),
@@ -40,7 +48,7 @@ func ExtractImages(filename string, at time.Duration, duration time.Duration) ([
 	off := 0
 	buf := out.Bytes()
 
-	var images []image.Image
+	var hashes []*goimagehash.ImageHash
 	for {
 		if off >= len(buf) {
 			break
@@ -58,15 +66,22 @@ func ExtractImages(filename string, at time.Duration, duration time.Duration) ([
 		// Account for the two bytes which are searched at the end
 		end += 2
 
-		img, err := jpeg.Decode(bytes.NewBuffer(tail[start:end]))
+		frame, err := jpeg.Decode(bytes.NewBuffer(tail[start:end]))
 		if err != nil {
 			return nil, fmt.Errorf("could not decode JPEG at bytes %d to %d: %w", start+off, end+off, err)
 		}
-		images = append(images, img)
+
+		// TODO Maybe parallelize?
+		hash, err := h.HashFunc(frame)
+		if err != nil {
+			return nil, fmt.Errorf("could not hash frame: %w", err)
+		}
+
+		hashes = append(hashes, hash)
 
 		// Advance the offset after the last image found
 		off += end
 	}
 
-	return images, nil
+	return hashes, nil
 }
