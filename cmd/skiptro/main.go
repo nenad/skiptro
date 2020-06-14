@@ -52,8 +52,8 @@ func main() {
 	}
 
 	extractor := skiptro.HashExtractor{
-		HashFunc:  hashFunc,
-		FrameStep: *fps,
+		HashFunc: hashFunc,
+		FPS:      *fps,
 	}
 
 	// TODO Can be done in goroutines
@@ -62,7 +62,7 @@ func main() {
 	var sHashes, tHashes []*goimagehash.ImageHash
 	go func() {
 		defer wg.Done()
-		hashes, err := extractor.ExtractHashes(*source, 0, *duration)
+		hashes, err := extractor.Hashes(*source, 0, *duration)
 		if err != nil {
 			panic(err)
 		}
@@ -71,7 +71,7 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		hashes, err := extractor.ExtractHashes(*target, 0, *duration)
+		hashes, err := extractor.Hashes(*target, 0, *duration)
 		if err != nil {
 			panic(err)
 		}
@@ -134,20 +134,14 @@ func main() {
 		}
 	}
 
+	// Convert to seconds
 	sSource := deltaDur * float64(bi) / 1000
 	sTarget := deltaDur * float64(bj) / 1000
 	end := deltaDur * float64(maxFrames) / 1000
 
-	// // Offset 2 secs
-	// end -= 2
-	//
-	// if end < 0 {
-	// 	end = 0
-	// }
-
 	if *edl {
 		edlPath := strings.TrimSuffix(*target, path.Ext(*target)) + ".edl"
-		err := ioutil.WriteFile(edlPath, []byte(fmt.Sprintf("%.2f %.2f 0\n", sTarget, sTarget+end)), 0644)
+		err := ioutil.WriteFile(edlPath, []byte(fmt.Sprintf("%.2f %.2f 3\n", sTarget, sTarget+end)), 0644)
 		if err != nil {
 			panic(err)
 		}
