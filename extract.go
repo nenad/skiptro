@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/jpeg"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -110,15 +111,16 @@ func (m *Metadata) UnmarshalJSON(data []byte) error {
 
 // ExtractHashes returns images from a video
 func (h *HashExtractor) Hashes(filename string, at time.Duration, duration time.Duration) ([]*goimagehash.ImageHash, error) {
+	// TODO Set up the scale depending on the hashing algorithm used. Probably better in a constructor
+	// Maybe storing the allowed function pointers in variable and do comparison
 
-	// TODO Maybe extract streaming from output?
 	cmd := exec.Command("ffmpeg",
 		"-ss", fmt.Sprintf("%.0f", at.Seconds()),
 		"-i", filename,
 		"-an",           // Disable audio stream
 		"-c:v", "mjpeg", // Set encoder to mjpeg
 		"-f", "image2pipe", // Set output to image2pipe
-		"-vf", fmt.Sprintf("fps=%d", h.FPS),
+		"-vf", fmt.Sprintf("fps=%d,scale=9:8", h.FPS), // Prepare for Difference hash
 		"-pix_fmt", "yuvj422p",
 		"-q", "1",
 		"-to", fmt.Sprintf("%.0f", duration.Seconds()),
@@ -165,8 +167,10 @@ func (h *HashExtractor) Hashes(filename string, at time.Duration, duration time.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	n := runtime.NumCPU()
+
 	wg := sync.WaitGroup{}
-	wg.Add(10)
+	wg.Add(n)
 	workCh := make(chan imageData, len(imagesData))
 	for i, imgBytes := range imagesData {
 		workCh <- imageData{index: i, bytes: imgBytes}
@@ -175,11 +179,12 @@ func (h *HashExtractor) Hashes(filename string, at time.Duration, duration time.
 
 	resultCh := make(chan hashResult, len(imagesData))
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < n; i++ {
 		go h.startWorker(&wg, ctx, workCh, resultCh)
 	}
 
 	hashes := make([]*goimagehash.ImageHash, len(imagesData))
+
 	var hashErr error
 	go func() {
 		for res := range resultCh {
@@ -208,12 +213,8 @@ func (h *HashExtractor) startWorker(wg *sync.WaitGroup, ctx context.Context, img
 		r := NewReader(ctx, bytes.NewBuffer(data.bytes))
 		frame, err := jpeg.Decode(r)
 		if err != nil {
-			if err == context.Canceled {
-				return
-			}
-
 			resultCh <- hashResult{err: fmt.Errorf("could not decode image: %w", err)}
-			return
+			break
 		}
 
 		hash, err := h.HashFunc(frame)

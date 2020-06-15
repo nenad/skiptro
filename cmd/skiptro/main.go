@@ -4,9 +4,14 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"image/color"
+	"image/png"
 	"io/ioutil"
 	"log"
+	"os"
 	"path"
+	"runtime"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"time"
@@ -28,6 +33,7 @@ var (
 	debug     = flag.Bool("debug", false, "Prints debug statements")
 	fps       = flag.Int("fps", 2, "How many frames samples should be taken in one second")
 	edl       = flag.Bool("edl", false, "Should a EDL file be produced as an output for the target")
+	profile   = flag.String("profile", "", "Writes a CPU profile to the disk")
 )
 
 func main() {
@@ -56,6 +62,19 @@ func main() {
 		FPS:      *fps,
 	}
 
+	fmt.Println("Goroutines start: ", runtime.NumGoroutine())
+
+	if *profile != "" {
+		f, err := os.Create(*profile)
+		if err != nil {
+			panic(err)
+		}
+		defer pprof.StopCPUProfile()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			panic(err)
+		}
+	}
+
 	// TODO Can be done in goroutines
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -79,6 +98,8 @@ func main() {
 	}()
 	wg.Wait()
 
+	fmt.Println("Goroutines end: ", runtime.NumGoroutine())
+
 	fmt.Printf("Len1: %d, Len2: %d\n", len(sHashes), len(tHashes))
 
 	similar := make([][]bool, len(sHashes))
@@ -88,7 +109,11 @@ func main() {
 	for i, h1 := range sHashes {
 		similar[i] = make([]bool, len(tHashes))
 		for j, h2 := range tHashes {
-			dist, _ := h1.Distance(h2)
+			dist, err := h1.Distance(h2)
+			if err != nil {
+				panic(fmt.Errorf("error on distance: %w", err))
+			}
+
 			if dist < *tolerance {
 				similar[i][j] = true
 			}
@@ -96,21 +121,47 @@ func main() {
 	}
 
 	if *debug {
-		fmt.Println()
-		// Print matrix for visual debugging
-		for i := 0; i < len(similar); i++ {
-			for j := 0; j < len(similar[i]); j++ {
-				if similar[i][j] {
-					fmt.Printf("0")
+		img := image.NewRGBA(image.Rectangle{Min: image.Point{X: 0, Y: 0}, Max: image.Point{X: len(similar), Y: len(similar[0])}})
+		// Draw matrix for visual debugging
+		for x := 0; x < len(similar); x++ {
+			for y := 0; y < len(similar[x]); y++ {
+				// Draw checkerboard
+				if (x+y)%2 == 0 {
+					img.Set(x, y, color.RGBA{R: 0xaa, G: 0xaa, B: 0xaa, A: 0xaa})
 				} else {
-					fmt.Printf("_")
+					img.Set(x, y, color.White)
+				}
+
+				// Mark 5sec and 30sec with different colors
+				if x%(5**fps) == 0 || y%(5**fps) == 0 {
+					//  #ffae98
+					img.Set(x, y, color.RGBA{R: 0xff, G: 0xae, B: 0x98, A: 0xff})
+				}
+				if x%(30**fps) == 0 || y%(30**fps) == 0 {
+					//  #98bcff
+					img.Set(x, y, color.RGBA{R: 0x98, G: 0xbc, B: 0xff, A: 0xff})
+				}
+
+				// Override if there is a similar pixel
+				if similar[x][y] {
+					//  #a41caf
+					img.Set(x, y, color.RGBA{R: 0xa4, G: 0x1c, B: 0xaf, A: 0xff})
 				}
 			}
-			fmt.Println()
+		}
+
+		imgOut, err := os.Create("debug.png")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if err := png.Encode(imgOut, img); err != nil {
+			log.Fatal(err)
 		}
 	}
 
 	// Finds longest diagonal with similar values
+	// TODO Should have a threshold for seconds of dissimilarity for intros with different scenes (i.e. The Office)
 	rows := len(similar)
 	cols := len(similar[0])
 	bi, bj, maxFrames := 0, 0, 0
@@ -148,8 +199,8 @@ func main() {
 	}
 
 	fmt.Printf(
-		"i: %d (source frame at %.2fs, end at %.2fms);\n"+
-			"j: %d (target frame at %.2fs, end at %.2fms);\n"+
+		"i: %d (source frame at %.2fs, end at %.2fs);\n"+
+			"j: %d (target frame at %.2fs, end at %.2fs);\n"+
 			"maxFrames: %d; duration: %.2f\n",
 		bi, sSource, sSource+end,
 		bj, sTarget, sTarget+end,
