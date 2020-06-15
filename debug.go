@@ -1,11 +1,14 @@
 package skiptro
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
 	"log"
 	"os"
+	"runtime/pprof"
+	"runtime/trace"
 )
 
 func DebugImage(out string, similarityMatrix [][]bool, fps int) {
@@ -46,4 +49,25 @@ func DebugImage(out string, similarityMatrix [][]bool, fps int) {
 	if err := png.Encode(imgOut, img); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func ProfileAndTrace(name string) (stopCpuFunc func(), stopTraceFunc func(), err error) {
+	ftrace, err := os.Create(name + ".trace")
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not create file: %w", err)
+	}
+
+	if err := trace.Start(ftrace); err != nil {
+		return nil, nil, fmt.Errorf("could not start trace: %w", err)
+	}
+
+	f, err := os.Create(name + ".profile")
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not create file: %w", err)
+	}
+	if err := pprof.StartCPUProfile(f); err != nil {
+		return nil, nil, fmt.Errorf("could not start cpu profiler: %w", err)
+	}
+
+	return pprof.StopCPUProfile, trace.Stop, nil
 }

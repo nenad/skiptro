@@ -5,11 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
 	"path"
 	"runtime"
-	"runtime/pprof"
-	"runtime/trace"
 	"strings"
 	"sync"
 	"time"
@@ -60,27 +57,13 @@ func main() {
 
 	extractor := skiptro.NewExtractor(hashFunc, *fps, *workers)
 
-	fmt.Println("Goroutines start: ", runtime.NumGoroutine())
-
 	if *profile != "" {
-		ftrace, err := os.Create(*profile + ".trace")
+		s1, s2, err := skiptro.ProfileAndTrace(*profile)
 		if err != nil {
-			panic(err)
+			log.Fatal("could not start profiling: ", err)
 		}
-
-		if err := trace.Start(ftrace); err != nil {
-			panic(err)
-		}
-		defer trace.Stop()
-
-		f, err := os.Create(*profile)
-		if err != nil {
-			panic(err)
-		}
-		defer pprof.StopCPUProfile()
-		if err := pprof.StartCPUProfile(f); err != nil {
-			panic(err)
-		}
+		defer s1()
+		defer s2()
 	}
 
 	wg := sync.WaitGroup{}
@@ -105,26 +88,11 @@ func main() {
 	}()
 	wg.Wait()
 
-	fmt.Println("Goroutines end: ", runtime.NumGoroutine())
-
-	fmt.Printf("Len1: %d, Len2: %d\n", len(sHashes), len(tHashes))
-
-	similar := make([][]bool, len(sHashes))
-
 	deltaDur := float64(duration.Milliseconds()) / float64(len(sHashes))
 
-	for i, h1 := range sHashes {
-		similar[i] = make([]bool, len(tHashes))
-		for j, h2 := range tHashes {
-			dist, err := h1.Distance(h2)
-			if err != nil {
-				panic(fmt.Errorf("error on distance: %w", err))
-			}
-
-			if dist < *tolerance {
-				similar[i][j] = true
-			}
-		}
+	similar, err := skiptro.FindReferenceFrames(sHashes, tHashes, *tolerance)
+	if err != nil {
+		log.Fatal("could not find reference frames: ", err)
 	}
 
 	if *debug {
