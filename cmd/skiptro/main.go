@@ -30,6 +30,7 @@ var (
 	source    = flag.String("source", "", "File which contains the intro")
 	target    = flag.String("target", "", "File in which we are looking for the intro")
 	tolerance = flag.Int("tolerance", 10, "How similar should the images be. Lower values means more similar.")
+	workers   = flag.Int("workers", runtime.NumCPU(), "How many workers to spin up for parallel processing (default is number of processors)")
 	debug     = flag.Bool("debug", false, "Prints debug statements")
 	fps       = flag.Int("fps", 2, "How many frames samples should be taken in one second")
 	edl       = flag.Bool("edl", false, "Should a EDL file be produced as an output for the target")
@@ -39,14 +40,16 @@ var (
 func main() {
 	flag.Parse()
 
-	var hashFunc func(image.Image) (*goimagehash.ImageHash, error)
+	var hashFunc *skiptro.HashFunc
 	switch strings.ToLower(*hashType) {
 	case "difference":
-		hashFunc = goimagehash.DifferenceHash
+		hashFunc = &skiptro.HashDifference
 	case "perception":
-		hashFunc = goimagehash.PerceptionHash
+		hashFunc = &skiptro.HashPerception
 	case "average":
-		hashFunc = goimagehash.AverageHash
+		hashFunc = &skiptro.HashAverage
+	default:
+		log.Fatal("-hashtype must be 'difference', 'perception', or 'average'")
 	}
 
 	if *source == "" {
@@ -57,10 +60,7 @@ func main() {
 		log.Fatal("-target option is empty or not provided")
 	}
 
-	extractor := skiptro.HashExtractor{
-		HashFunc: hashFunc,
-		FPS:      *fps,
-	}
+	extractor := skiptro.NewExtractor(hashFunc, *fps, *workers)
 
 	fmt.Println("Goroutines start: ", runtime.NumGoroutine())
 
