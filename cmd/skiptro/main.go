@@ -3,15 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	"image"
-	"image/color"
-	"image/png"
 	"io/ioutil"
 	"log"
 	"os"
 	"path"
 	"runtime"
 	"runtime/pprof"
+	"runtime/trace"
 	"strings"
 	"sync"
 	"time"
@@ -65,6 +63,16 @@ func main() {
 	fmt.Println("Goroutines start: ", runtime.NumGoroutine())
 
 	if *profile != "" {
+		ftrace, err := os.Create(*profile + ".trace")
+		if err != nil {
+			panic(err)
+		}
+
+		if err := trace.Start(ftrace); err != nil {
+			panic(err)
+		}
+		defer trace.Stop()
+
 		f, err := os.Create(*profile)
 		if err != nil {
 			panic(err)
@@ -75,7 +83,6 @@ func main() {
 		}
 	}
 
-	// TODO Can be done in goroutines
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	var sHashes, tHashes []*goimagehash.ImageHash
@@ -121,43 +128,7 @@ func main() {
 	}
 
 	if *debug {
-		img := image.NewRGBA(image.Rectangle{Min: image.Point{X: 0, Y: 0}, Max: image.Point{X: len(similar), Y: len(similar[0])}})
-		// Draw matrix for visual debugging
-		for x := 0; x < len(similar); x++ {
-			for y := 0; y < len(similar[x]); y++ {
-				// Draw checkerboard
-				if (x+y)%2 == 0 {
-					img.Set(x, y, color.RGBA{R: 0xaa, G: 0xaa, B: 0xaa, A: 0xaa})
-				} else {
-					img.Set(x, y, color.White)
-				}
-
-				// Mark 5sec and 30sec with different colors
-				if x%(5**fps) == 0 || y%(5**fps) == 0 {
-					//  #ffae98
-					img.Set(x, y, color.RGBA{R: 0xff, G: 0xae, B: 0x98, A: 0xff})
-				}
-				if x%(30**fps) == 0 || y%(30**fps) == 0 {
-					//  #98bcff
-					img.Set(x, y, color.RGBA{R: 0x98, G: 0xbc, B: 0xff, A: 0xff})
-				}
-
-				// Override if there is a similar pixel
-				if similar[x][y] {
-					//  #a41caf
-					img.Set(x, y, color.RGBA{R: 0xa4, G: 0x1c, B: 0xaf, A: 0xff})
-				}
-			}
-		}
-
-		imgOut, err := os.Create("debug.png")
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if err := png.Encode(imgOut, img); err != nil {
-			log.Fatal(err)
-		}
+		skiptro.DebugImage("debug", similar, *fps)
 	}
 
 	// Finds longest diagonal with similar values
