@@ -63,11 +63,8 @@ func NewExtractor(f *HashFunc, fps int, workers int) *HashExtractor {
 	}
 }
 
-// ExtractHashes returns images from a video
+// Hashes returns hashed images from a video file
 func (h *HashExtractor) Hashes(filename string, at time.Duration, duration time.Duration) ([]*goimagehash.ImageHash, error) {
-	// TODO Set up the scale depending on the hashing algorithm used. Probably better in a constructor
-	// Maybe storing the allowed function pointers in variable and do comparison
-
 	cmd := exec.Command("ffmpeg",
 		"-ss", fmt.Sprintf("%.0f", at.Seconds()),
 		"-i", filename, // Set input file
