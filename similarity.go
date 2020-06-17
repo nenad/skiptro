@@ -6,7 +6,7 @@ import (
 	"github.com/corona10/goimagehash"
 )
 
-func FindReferenceFrames(source, target []*goimagehash.ImageHash, tolerance int) ([][]bool, error) {
+func FindSimilarFrames(source, target []*goimagehash.ImageHash, tolerance int) ([][]bool, error) {
 	similarityMatrix := make([][]bool, len(source))
 	for i, h1 := range source {
 		similarityMatrix[i] = make([]bool, len(target))

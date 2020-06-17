@@ -9,9 +9,10 @@ import (
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
+	"time"
 )
 
-func DebugImage(out string, similarityMatrix [][]bool, fps int) {
+func DebugImage(similarityMatrix [][]bool, fps int) {
 	img := image.NewRGBA(image.Rectangle{Min: image.Point{X: 0, Y: 0}, Max: image.Point{X: len(similarityMatrix), Y: len(similarityMatrix[0])}})
 	// Draw matrix for visual debugging
 	for x := 0; x < len(similarityMatrix); x++ {
@@ -41,7 +42,8 @@ func DebugImage(out string, similarityMatrix [][]bool, fps int) {
 		}
 	}
 
-	imgOut, err := os.Create(out + ".png")
+	name := time.Now().Format("2006-01-02-15-04-05")
+	imgOut, err := os.Create(name + ".png")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,7 +53,8 @@ func DebugImage(out string, similarityMatrix [][]bool, fps int) {
 	}
 }
 
-func ProfileAndTrace(name string) (stopCpuFunc func(), stopTraceFunc func(), err error) {
+func ProfileAndTrace() (stopCpuFunc func(), stopTraceFunc func(), err error) {
+	name := time.Now().Format("2006-01-02-15-04-05")
 	ftrace, err := os.Create(name + ".trace")
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not create file: %w", err)

@@ -1,15 +1,12 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"path"
-	"runtime"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/corona10/goimagehash"
 	"github.com/nenad/skiptro"
@@ -19,46 +16,18 @@ import (
 // TODO No source/target only targets (multiple files)
 // TODO Targets + saved file with intro hashes
 
-var (
-	duration  = flag.Duration("duration", time.Second*20, "How long should it look for the intro")
-	hashType  = flag.String("hashtype", "difference", "Which hash type should be used")
-	source    = flag.String("source", "", "File which contains the intro")
-	target    = flag.String("target", "", "File in which we are looking for the intro")
-	tolerance = flag.Int("tolerance", 10, "How similar should the images be. Lower values means more similar.")
-	workers   = flag.Int("workers", runtime.NumCPU(), "How many workers to spin up for parallel processing (default is number of processors)")
-	debug     = flag.Bool("debug", false, "Prints debug statements")
-	fps       = flag.Int("fps", 2, "How many frames samples should be taken in one second")
-	edl       = flag.Bool("edl", false, "Should a EDL file be produced as an output for the target")
-	profile   = flag.String("profile", "", "Writes a CPU profile to the disk")
-)
-
 func main() {
-	flag.Parse()
 
-	var hashFunc *skiptro.HashFunc
-	switch strings.ToLower(*hashType) {
-	case "difference":
-		hashFunc = &skiptro.HashDifference
-	case "perception":
-		hashFunc = &skiptro.HashPerception
-	case "average":
-		hashFunc = &skiptro.HashAverage
-	default:
-		log.Fatal("-hashtype must be 'difference', 'perception', or 'average'")
+	cfg := skiptro.Config{}
+	err := cfg.Parse()
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	if *source == "" {
-		log.Fatal("-source option is empty or not provided")
-	}
+	extractor := skiptro.NewExtractor(cfg.HashFunc, cfg.FPS, cfg.Workers)
 
-	if *target == "" {
-		log.Fatal("-target option is empty or not provided")
-	}
-
-	extractor := skiptro.NewExtractor(hashFunc, *fps, *workers)
-
-	if *profile != "" {
-		s1, s2, err := skiptro.ProfileAndTrace(*profile)
+	if cfg.Debug {
+		s1, s2, err := skiptro.ProfileAndTrace()
 		if err != nil {
 			log.Fatal("could not start profiling: ", err)
 		}
@@ -68,35 +37,33 @@ func main() {
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	var sHashes, tHashes []*goimagehash.ImageHash
+	var sourceHashes, targetHashes []*goimagehash.ImageHash
 	go func() {
 		defer wg.Done()
-		hashes, err := extractor.Hashes(*source, 0, *duration)
+		hashes, err := extractor.Hashes(cfg.Source, 0, cfg.Duration)
 		if err != nil {
 			panic(err)
 		}
-		sHashes = hashes
+		sourceHashes = hashes
 	}()
 
 	go func() {
 		defer wg.Done()
-		hashes, err := extractor.Hashes(*target, 0, *duration)
+		hashes, err := extractor.Hashes(cfg.Target, 0, cfg.Duration)
 		if err != nil {
 			panic(err)
 		}
-		tHashes = hashes
+		targetHashes = hashes
 	}()
 	wg.Wait()
 
-	deltaDur := float64(duration.Milliseconds()) / float64(len(sHashes))
-
-	similar, err := skiptro.FindReferenceFrames(sHashes, tHashes, *tolerance)
+	similar, err := skiptro.FindSimilarFrames(sourceHashes, targetHashes, cfg.Tolerance)
 	if err != nil {
-		log.Fatal("could not find reference frames: ", err)
+		log.Fatal("could not find similar frames: ", err)
 	}
 
-	if *debug {
-		skiptro.DebugImage("debug", similar, *fps)
+	if cfg.Debug {
+		skiptro.DebugImage(similar, cfg.FPS)
 	}
 
 	// Finds longest diagonal with similar values
@@ -125,12 +92,13 @@ func main() {
 	}
 
 	// Convert to seconds
+	deltaDur := float64(cfg.Duration.Milliseconds()) / float64(len(similar))
 	sSource := deltaDur * float64(bi) / 1000
 	sTarget := deltaDur * float64(bj) / 1000
 	end := deltaDur * float64(maxFrames) / 1000
 
-	if *edl {
-		edlPath := strings.TrimSuffix(*target, path.Ext(*target)) + ".edl"
+	if cfg.EDL {
+		edlPath := strings.TrimSuffix(cfg.Target, path.Ext(cfg.Target)) + ".edl"
 		err := ioutil.WriteFile(edlPath, []byte(fmt.Sprintf("%.2f %.2f 3\n", sTarget, sTarget+end)), 0644)
 		if err != nil {
 			panic(err)
