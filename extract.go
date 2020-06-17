@@ -70,15 +70,15 @@ func (h *HashExtractor) Hashes(filename string, at time.Duration, duration time.
 
 	cmd := exec.Command("ffmpeg",
 		"-ss", fmt.Sprintf("%.0f", at.Seconds()),
-		"-i", filename,
+		"-i", filename, // Set input file
 		"-an",           // Disable audio stream
 		"-c:v", "mjpeg", // Set encoder to mjpeg
 		"-f", "image2pipe", // Set output to image2pipe
 		"-vf", fmt.Sprintf("fps=%d%s", h.FPS, h.ffmpegScale),
-		"-pix_fmt", "yuvj422p",
+		"-pix_fmt", "yuvj422p", // Set a common pixel format for output
 		"-q", "1",
-		"-to", fmt.Sprintf("%.0f", duration.Seconds()),
-		"pipe:1",
+		"-to", fmt.Sprintf("%.0f", duration.Seconds()), // Duration
+		"pipe:1", // Pipe to file descriptor 1 (stdout)
 	)
 
 	out := bytes.Buffer{}
@@ -117,11 +117,10 @@ func (h *HashExtractor) Hashes(filename string, at time.Duration, duration time.
 		index++
 	}
 
-	// TODO Make parent with timeout?
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	wg := sync.WaitGroup{}
+	wg := &sync.WaitGroup{}
 	wg.Add(h.WorkerCount)
 	workCh := make(chan imageData, len(imagesData))
 	for i, imgBytes := range imagesData {
@@ -131,12 +130,14 @@ func (h *HashExtractor) Hashes(filename string, at time.Duration, duration time.
 
 	resultCh := make(chan hashResult, len(imagesData))
 	for i := 0; i < h.WorkerCount; i++ {
-		go h.startWorker(&wg, ctx, workCh, resultCh)
+		go h.startWorker(wg, ctx, workCh, resultCh)
 	}
 
-	hashes := make([]*goimagehash.ImageHash, len(imagesData))
 	errCh := make(chan error, h.WorkerCount)
+	doneCh := make(chan []*goimagehash.ImageHash, 1)
+	defer close(doneCh)
 	go func() {
+		hashes := make([]*goimagehash.ImageHash, len(imagesData))
 		for res := range resultCh {
 			if res.err != nil {
 				errCh <- res.err
@@ -145,32 +146,34 @@ func (h *HashExtractor) Hashes(filename string, at time.Duration, duration time.
 			}
 			hashes[res.index] = res.hash
 		}
+		doneCh <- hashes
 	}()
 
 	wg.Wait()
 	close(resultCh)
-	defer close(errCh) // deferring close of errCh so that there are no nil values in the channel before the select
+	// deferred close of errCh so that there are no nil values in the channel
+	defer close(errCh)
 
 	select {
 	case err := <-errCh:
 		return nil, fmt.Errorf("error while extracting frames: %w", err)
-	default:
+	case hashes := <-doneCh:
 		return hashes, nil
 	}
 }
 
-func (h *HashExtractor) startWorker(wg *sync.WaitGroup, ctx context.Context, imgData <-chan imageData, resultCh chan<- hashResult) {
+func (h *HashExtractor) startWorker(wg *sync.WaitGroup, ctx context.Context, input <-chan imageData, output chan<- hashResult) {
 	defer wg.Done()
-	for data := range imgData {
+	for data := range input {
 		r := NewReader(ctx, bytes.NewBuffer(data.bytes))
 		frame, err := jpeg.Decode(r)
 		if err != nil {
-			resultCh <- hashResult{err: fmt.Errorf("could not decode image: %w", err)}
+			output <- hashResult{err: fmt.Errorf("could not decode image: %w", err)}
 			break
 		}
 
 		hash, err := h.HashFunc(frame)
-		resultCh <- hashResult{
+		output <- hashResult{
 			hash:  hash,
 			err:   err,
 			index: data.index,
