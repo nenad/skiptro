@@ -32,6 +32,4 @@ Not suitable for usage yet.
 ## Features missing
 
 - Full directory processing
-- Other formats than EDL supported (VLC uses m3u for example)
-- More precise intro detection
 - Daemon mode which scans for new files and processes them automatically

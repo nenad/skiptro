@@ -22,6 +22,7 @@ type (
 )
 
 // FindLongestScene returns the longest matching scene between two
+// TODO Return hash frames of the intro in the scene
 func FindLongestScene(source, target []*goimagehash.ImageHash, tolerance int, duration time.Duration) (Scene, error) {
 	similarityMatrix := make([][]bool, len(source))
 	for i, h1 := range source {
@@ -42,8 +43,13 @@ func FindLongestScene(source, target []*goimagehash.ImageHash, tolerance int, du
 	rows := len(similarityMatrix)
 	cols := len(similarityMatrix[0])
 
+	// TODO Configurable
+	skipTolerance := 3
+	curSkip := 0
+	inFlow := false
+
 	// Right/top side of diagonal
-	targetFrame, max :=  0, 0
+	targetFrame, max := 0, 0
 	for i := 0; i < rows; i++ {
 		j := 0
 		diagSimilar := 0
@@ -57,6 +63,17 @@ func FindLongestScene(source, target []*goimagehash.ImageHash, tolerance int, du
 
 			if similar {
 				diagSimilar++
+				inFlow = true
+			} else if inFlow {
+				curSkip++
+				if curSkip == skipTolerance {
+					curSkip = 0
+					inFlow = false
+				}
+
+				if inFlow {
+					diagSimilar++
+				}
 			}
 
 			if diagSimilar > max {
@@ -82,6 +99,17 @@ func FindLongestScene(source, target []*goimagehash.ImageHash, tolerance int, du
 
 			if similar {
 				diagSimilar++
+				inFlow = true
+			} else if inFlow {
+				curSkip++
+				if curSkip == skipTolerance {
+					curSkip = 0
+					inFlow = false
+				}
+
+				if inFlow {
+					diagSimilar++
+				}
 			}
 
 			if diagSimilar > max {

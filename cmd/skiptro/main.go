@@ -78,7 +78,7 @@ func main() {
 			panic(err)
 		}
 	}
-	
+
 	duration := scene.End - scene.Start
 
 	fmt.Printf("Video %q stats:\n- Start: %s\n- End: %s\n- Duration: %s\n", cfg.Target, scene.Start.String(), scene.End.String(), duration.String())
