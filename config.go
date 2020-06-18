@@ -27,10 +27,10 @@ func (c *Config) Parse() error {
 	hashType := set.String("hashtype", "difference", "Which hash type should be used")
 	source := set.String("source", "", "File which contains the intro")
 	target := set.String("target", "", "File in which we are looking for the intro")
-	tolerance := set.Int("tolerance", 10, "How similar should the images be. Lower values means more similar.")
+	tolerance := set.Int("tolerance", 13, "How similar should the images be. Lower values means more similar.")
 	workers := set.Int("workers", runtime.NumCPU(), "How many workers to spin up for parallel processing (default is number of processors)")
 	debug := set.Bool("debug", false, "Prints debug statements")
-	fps := set.Int("fps", 2, "How many frames samples should be taken in one second")
+	fps := set.Int("fps", 3, "How many frames samples should be taken in one second")
 	edl := set.Bool("edl", false, "Should a EDL file be produced as an output for the target")
 
 	if err := set.Parse(os.Args[1:]); err != nil {
