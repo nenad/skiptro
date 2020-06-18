@@ -17,13 +17,13 @@ type Config struct {
 	Tolerance int
 	Workers   int
 	FPS       int
-	EDL       bool
+	SkipFile  bool
 	Debug     bool
 }
 
 func (c *Config) Parse() error {
 	set := flag.NewFlagSet("config", flag.ExitOnError)
-	duration := set.Duration("duration", time.Second*20, "How long should it look for the intro")
+	duration := set.Duration("duration", time.Minute * 5, "How long should it look for the intro")
 	hashType := set.String("hashtype", "difference", "Which hash type should be used")
 	source := set.String("source", "", "File which contains the intro")
 	target := set.String("target", "", "File in which we are looking for the intro")
@@ -31,7 +31,7 @@ func (c *Config) Parse() error {
 	workers := set.Int("workers", runtime.NumCPU(), "How many workers to spin up for parallel processing (default is number of processors)")
 	debug := set.Bool("debug", false, "Prints debug statements")
 	fps := set.Int("fps", 3, "How many frames samples should be taken in one second")
-	edl := set.Bool("edl", false, "Should a EDL file be produced as an output for the target")
+	skipfile := set.Bool("skipfile", true, "Should a skip file be produced as an output for the target")
 
 	if err := set.Parse(os.Args[1:]); err != nil {
 		return fmt.Errorf("error while parsing flags: %w", err)
@@ -80,7 +80,7 @@ func (c *Config) Parse() error {
 	c.Tolerance = *tolerance
 	c.Workers = *workers
 	c.FPS = *fps
-	c.EDL = *edl
+	c.SkipFile = *skipfile
 	c.Debug = *debug
 
 	return nil

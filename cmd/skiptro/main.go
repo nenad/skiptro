@@ -65,17 +65,17 @@ func main() {
 		skiptro.DebugImage(scene, cfg.FPS)
 	}
 
-	if cfg.EDL {
+	if cfg.SkipFile {
 		edlPath := strings.TrimSuffix(cfg.Target, path.Ext(cfg.Target)) + ".edl"
 		err := ioutil.WriteFile(edlPath, skiptro.EDL(scene), 0644)
 		if err != nil {
-			panic(err)
+			log.Fatalf("could not write .edl file: %s", err)
 		}
 
 		m3uPath := strings.TrimSuffix(cfg.Target, path.Ext(cfg.Target)) + ".m3u"
 		err = ioutil.WriteFile(m3uPath, skiptro.M3U(scene, cfg.Target), 0644)
 		if err != nil {
-			panic(err)
+			log.Fatalf("could not write .m3u file: %s", err)
 		}
 	}
 
