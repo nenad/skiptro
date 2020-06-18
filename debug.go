@@ -9,10 +9,10 @@ import (
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
-	"time"
 )
 
-func DebugImage(similarityMatrix [][]bool, fps int) {
+func DebugImage(scene Scene, fps int) {
+	similarityMatrix := scene.Similarity.Matrix
 	img := image.NewRGBA(image.Rectangle{Min: image.Point{X: 0, Y: 0}, Max: image.Point{X: len(similarityMatrix), Y: len(similarityMatrix[0])}})
 	// Draw matrix for visual debugging
 	for x := 0; x < len(similarityMatrix); x++ {
@@ -38,12 +38,14 @@ func DebugImage(similarityMatrix [][]bool, fps int) {
 			if similarityMatrix[x][y] {
 				//  #a41caf
 				img.Set(x, y, color.RGBA{R: 0xa4, G: 0x1c, B: 0xaf, A: 0xff})
+				if y >= scene.Similarity.StartIndex && y <= scene.Similarity.EndIndex {
+					img.Set(x, y, color.RGBA{R: 0xff, A: 0xff})
+				}
 			}
 		}
 	}
 
-	name := time.Now().Format("2006-01-02-15-04-05")
-	imgOut, err := os.Create(name + ".png")
+	imgOut, err := os.Create("debug.png")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -54,8 +56,7 @@ func DebugImage(similarityMatrix [][]bool, fps int) {
 }
 
 func ProfileAndTrace() (stopCpuFunc func(), stopTraceFunc func(), err error) {
-	name := time.Now().Format("2006-01-02-15-04-05")
-	ftrace, err := os.Create(name + ".trace")
+	ftrace, err := os.Create("debug.trace")
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not create file: %w", err)
 	}
@@ -64,7 +65,7 @@ func ProfileAndTrace() (stopCpuFunc func(), stopTraceFunc func(), err error) {
 		return nil, nil, fmt.Errorf("could not start trace: %w", err)
 	}
 
-	f, err := os.Create(name + ".profile")
+	f, err := os.Create("debug.profile")
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not create file: %w", err)
 	}
