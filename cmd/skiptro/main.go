@@ -67,7 +67,13 @@ func main() {
 
 	if cfg.EDL {
 		edlPath := strings.TrimSuffix(cfg.Target, path.Ext(cfg.Target)) + ".edl"
-		err := ioutil.WriteFile(edlPath, []byte(fmt.Sprintf("%.2f %.2f 3\n", scene.Start.Seconds(), scene.End.Seconds())), 0644)
+		err := ioutil.WriteFile(edlPath, skiptro.EDL(scene), 0644)
+		if err != nil {
+			panic(err)
+		}
+
+		m3uPath := strings.TrimSuffix(cfg.Target, path.Ext(cfg.Target)) + ".m3u"
+		err = ioutil.WriteFile(m3uPath, skiptro.M3U(scene, cfg.Target), 0644)
 		if err != nil {
 			panic(err)
 		}
